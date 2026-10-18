@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentTeam - Autonomous Software Delivery</title>
+<style>
+  :root { --bg:#0f1419; --panel:#171e26; --border:#263241; --text:#d7dee6; --muted:#8696a7; --accent:#4ea1ff;
+          --ok:#3fb950; --warn:#d29922; --bad:#f85149; --run:#a371f7; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 "Segoe UI", system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--border); background:var(--panel); }
+  header h1 { font-size:18px; margin:0; }
+  .badge { padding:2px 10px; border-radius:12px; font-size:12px; background:var(--border); text-transform:uppercase; letter-spacing:.5px; }
+  .badge.running { background:var(--run); color:#fff; } .badge.completed { background:var(--ok); color:#000; } .badge.failed { background:var(--bad); color:#fff; }
+  .muted { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 340px 1fr 420px; gap:12px; padding:12px; height:calc(100vh - 56px); }
+  .col { display:flex; flex-direction:column; gap:12px; min-height:0; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; display:flex; flex-direction:column; min-height:0; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 8px; }
+  .scroll { overflow:auto; min-height:0; flex:1; }
+  textarea { width:100%; min-height:120px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font:inherit; resize:vertical; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 14px; cursor:pointer; font-weight:600; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  label.chk { margin-right:12px; font-size:12px; color:var(--muted); }
+  .phase { display:flex; align-items:center; gap:8px; padding:4px 0; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--border); flex:none; }
+  .dot.running { background:var(--run); box-shadow:0 0 8px var(--run); } .dot.done { background:var(--ok); } .dot.failed { background:var(--bad); }
+  .agents { display:grid; grid-template-columns:repeat(auto-fill, minmax(210px, 1fr)); gap:8px; }
+  .agent { border:1px solid var(--border); border-radius:6px; padding:8px; background:var(--bg); }
+  .agent .name { font-weight:600; } .agent .role { font-size:11px; color:var(--muted); }
+  .agent .st { font-size:12px; margin-top:4px; } .st.working,.st.thinking,.st.testing { color:var(--run); } .st.waiting,.st.answering { color:var(--warn); }
+  .agent .paths { font-size:11px; color:var(--muted); margin-top:4px; word-break:break-all; }
+  .board { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+  .lane h3 { font-size:12px; color:var(--muted); margin:0 0 6px; }
+  .task { border-left:3px solid var(--border); background:var(--bg); padding:6px 8px; border-radius:4px; margin-bottom:6px; font-size:12px; }
+  .task.in_progress { border-color:var(--run); } .task.done { border-color:var(--ok); } .task.failed { border-color:var(--bad); }
+  .msg { border-bottom:1px solid var(--border); padding:6px 0; font-size:12px; }
+  .msg .hdr { color:var(--accent); } .msg .kind { font-size:10px; padding:1px 6px; border-radius:8px; background:var(--border); margin-left:4px; }
+  .kind.question { background:#1f6feb; } .kind.answer { background:#238636; } .kind.change_request { background:#9e6a03; } .kind.bug_report { background:#da3633; }
+  .msg .body { white-space:pre-wrap; color:var(--text); max-height:110px; overflow:auto; margin-top:2px; }
+  .log { font:12px/1.4 Consolas, monospace; white-space:pre-wrap; }
+  .log .error { color:var(--bad); } .log .violation { color:var(--warn); }
+  .file { font:12px Consolas, monospace; cursor:pointer; padding:2px 4px; display:flex; justify-content:space-between; gap:8px; }
+  .file:hover { background:var(--border); }
+  #viewer { position:fixed; inset:5% 8%; background:var(--panel); border:1px solid var(--border); border-radius:8px; display:none; flex-direction:column; z-index:10; }
+  #viewer pre { margin:0; padding:12px; overflow:auto; flex:1; font:12px Consolas, monospace; }
+  #viewer .bar { display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid var(--border); }
+  .tabs { display:flex; gap:6px; margin-bottom:8px; } .tabs button { background:var(--border); padding:4px 10px; font-weight:500; } .tabs button.active { background:var(--accent); }
+  .inp { width:100%; margin-top:6px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font:inherit; }
+  table.u { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px; } table.u td, table.u th { border-bottom:1px solid var(--border); padding:3px 4px; text-align:left; }
+  .tier { font-size:10px; padding:1px 6px; border-radius:8px; } .tier.small { background:#238636; } .tier.medium { background:#9e6a03; } .tier.large { background:#8957e5; } .tier.fixed,.tier.pinned { background:var(--border); }
+  .kpi { display:flex; gap:12px; margin-bottom:10px; } .kpi div { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:6px 10px; } .kpi b { display:block; font-size:16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AgentTeam</h1><span id="status" class="badge">idle</span>
+  <span id="cfg" class="muted"></span><span style="flex:1"></span><span id="proj" class="muted"></span>
+</header>
+<main>
+  <div class="col">
+    <div class="panel">
+      <h2>Requirement</h2>
+      <textarea id="req" placeholder="Describe the product you need, e.g. 'Build an employee leave management system with approval workflows, HR reporting and Slack notifications'"></textarea>
+      <input id="tech" class="inp" placeholder="Technology constraints (optional) - empty = architect decides">
+      <div style="display:flex; gap:6px">
+        <select id="routing" class="inp"><option value="auto">Smart model routing</option><option value="fixed">Single model</option></select>
+        <input id="budget" class="inp" type="number" min="0" placeholder="Token budget (0 = none)">
+      </div>
+      <div style="margin:8px 0">
+        <label class="chk"><input type="checkbox" id="exec"> run build/tests</label>
+        <label class="chk"><input type="checkbox" id="deploy"> deploy</label>
+      </div>
+      <button id="start">Start delivery</button>
+    </div>
+    <div class="panel scroll"><h2>Phases</h2><div id="phases"></div></div>
+    <div class="panel scroll" style="flex:1.4"><h2>Files <span id="fcount" class="muted"></span></h2><div id="files"></div></div>
+  </div>
+  <div class="col">
+    <div class="panel" style="max-height:42%"><h2>Team</h2><div class="scroll"><div id="agents" class="agents"></div></div></div>
+    <div class="panel" style="flex:1"><h2>Task board</h2><div class="scroll"><div id="board" class="board"></div></div></div>
+  </div>
+  <div class="col">
+    <div class="panel" style="flex:1">
+      <div class="tabs"><button class="active" data-tab="msgs">Team communication</button><button data-tab="models">AI models</button><button data-tab="log">Activity log</button></div>
+      <div id="msgs" class="scroll"></div>
+      <div id="models" class="scroll" style="display:none"></div>
+      <div id="log" class="scroll log" style="display:none"></div>
+    </div>
+  </div>
+</main>
+<div id="viewer"><div class="bar"><strong id="vtitle"></strong><button onclick="viewer.style.display='none'">Close</button></div><pre id="vbody"></pre></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let refreshTimer = null;
+
+function render(s) {
+  $("status").textContent = s.status; $("status").className = "badge " + s.status;
+  if (s.config) $("cfg").textContent = `${s.config.provider} / ${s.config.model}`;
+  $("proj").textContent = s.project_dir || "";
+  $("start").disabled = s.status === "running";
+  $("phases").innerHTML = s.phases.map(p => `<div class="phase"><span class="dot ${p.status}"></span>${esc(p.title || p.name)}</div>`).join("") || '<span class="muted">Waiting for a requirement</span>';
+  $("agents").innerHTML = s.agents.map(a => `<div class="agent"><div class="name">${esc(a.title)}</div><div class="role">${esc(a.role)}</div>
+    <div class="st ${esc(a.status)}">${esc(a.status)} ${a.activity ? "- " + esc(a.activity) : ""}</div>
+    <div class="paths">${esc((a.owned_paths || []).join("  "))}</div></div>`).join("");
+  const lanes = {pending:"To do", in_progress:"In progress", done:"Done", failed:"Failed"};
+  $("board").innerHTML = Object.entries(lanes).map(([k, title]) => {
+    const items = s.tasks.filter(t => (t.status || "pending") === k);
+    return `<div class="lane"><h3>${title} (${items.length})</h3>${items.map(t => `<div class="task ${k}" title="${esc(t.description)}">
+      <strong>${esc(t.id)}</strong> ${esc(t.title)}<div class="muted">${esc(t.assignee)}</div>${t.summary ? `<div class="muted">${esc(t.summary).slice(0,160)}</div>` : ""}</div>`).join("")}</div>`;
+  }).join("");
+  $("msgs").innerHTML = s.messages.slice().reverse().map(m => `<div class="msg"><span class="hdr">${esc(m.sender)} &rarr; ${esc(m.recipient)}</span>
+    <span class="kind ${esc(m.kind)}">${esc(m.kind)}</span><div><strong>${esc(m.subject)}</strong></div><div class="body">${esc(m.content)}</div></div>`).join("");
+  $("fcount").textContent = `(${s.files.length})`;
+  $("files").innerHTML = s.files.map(f => `<div class="file" data-path="${esc(f.path)}"><span>${esc(f.path)}</span><span class="muted">${esc(f.owner)}</span></div>`).join("");
+  renderModels(s);
+}
+
+function renderModels(s) {
+  const l = s.llm || {}, r = s.routing || {}, u = s.usage || {};
+  const routingRows = Object.entries(r).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+  const tierRows = Object.entries(l.by_tier || {}).map(([t, b]) => `<tr><td><span class="tier ${esc(t)}">${esc(t)}</span></td><td>${b.calls}</td><td>${b.tokens.toLocaleString()}</td></tr>`).join("");
+  const modelRows = Object.entries(l.by_model || {}).map(([m, b]) => `<tr><td>${esc(m)}</td><td>${b.calls}</td><td>${b.tokens.toLocaleString()}</td></tr>`).join("");
+  const savings = u.est_savings_pct != null ? `<div>Saved vs all-large<b>${u.est_savings_pct}%</b></div>` : "";
+  const recent = (l.recent || []).slice().reverse().map(c => `<div class="msg"><span class="tier ${esc(c.tier)}">${esc(c.tier)}</span>
+    <strong>${esc(c.model)}</strong> &larr; ${esc(c.agent)} / ${esc(c.task)} <span class="muted">(${c.prompt_tokens}+${c.completion_tokens} tok)</span>
+    <div class="muted">${esc(c.reason)}</div></div>`).join("");
+  $("models").innerHTML = `<div class="kpi"><div>LLM calls<b>${l.calls || 0}</b></div><div>Tokens<b>${(l.tokens || 0).toLocaleString()}</b></div>
+    <div>Est. cost<b>$${(l.cost || 0).toFixed(4)}</b></div>${savings}</div>
+    <table class="u"><tr><th colspan=2>Routing configuration</th></tr>${routingRows}</table>
+    ${s.tech_preferences ? `<p class="muted">Technology constraints: ${esc(s.tech_preferences)}</p>` : ""}
+    <table class="u"><tr><th>Tier</th><th>Calls</th><th>Tokens</th></tr>${tierRows}</table>
+    <table class="u"><tr><th>Model</th><th>Calls</th><th>Tokens</th></tr>${modelRows}</table>
+    <h2>Routing decisions</h2>${recent || '<span class="muted">No calls yet</span>'}`;
+}
+
+async function refresh() { const r = await fetch("/api/state"); render(await r.json()); }
+function scheduleRefresh() { if (!refreshTimer) refreshTimer = setTimeout(() => { refreshTimer = null; refresh(); }, 300); }
+
+function logEvent(e) {
+  const skip = ["agent_status", "llm_call"]; if (skip.includes(e.type)) return;
+  const t = new Date(e.ts * 1000).toLocaleTimeString();
+  let text = `${t} [${e.agent || "system"}] ${e.type}`;
+  if (e.path) text += ` ${e.path}`; if (e.title) text += ` ${e.title}`; if (e.task_id) text += ` ${e.task_id} ${e.status}`;
+  if (e.message) text += ` ${e.message}`; if (e.command) text += ` $ ${e.command}`; if (e.exit_code !== undefined) text += ` exit=${e.exit_code}`;
+  if (e.error) text += ` ${e.error}`; if (e.subject) text += ` ${e.sender} -> ${e.recipient}: ${e.subject}`;
+  const cls = e.type === "error" || e.type === "run_failed" ? "error" : e.type === "ownership_violation" ? "violation" : "";
+  const div = document.createElement("div"); div.className = cls; div.textContent = text;
+  $("log").prepend(div);
+}
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.onmessage = (m) => { const e = JSON.parse(m.data); if (e.type === "run_started") $("log").innerHTML = ""; logEvent(e); scheduleRefresh(); };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+
+$("start").onclick = async () => {
+  const requirement = $("req").value.trim(); if (!requirement) return alert("Enter a requirement");
+  const r = await fetch("/api/runs", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({requirement, execute:$("exec").checked, deploy:$("deploy").checked,
+      tech:$("tech").value.trim() || null, routing:$("routing").value, token_budget:parseInt($("budget").value) || null})});
+  if (!r.ok) alert((await r.json()).detail); else refresh();
+};
+$("files").onclick = async (ev) => {
+  const el = ev.target.closest(".file"); if (!el) return;
+  const r = await fetch("/api/file?path=" + encodeURIComponent(el.dataset.path));
+  $("vtitle").textContent = el.dataset.path; $("vbody").textContent = await r.text(); $("viewer").style.display = "flex";
+};
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
+  ["msgs", "models", "log"].forEach(id => $(id).style.display = b.dataset.tab === id ? "" : "none");
+});
+refresh(); connect();
+</script>
+</body>
+</html>
